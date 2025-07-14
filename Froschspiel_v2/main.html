@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Frosch Spiel mit Levels und Pause</title>
+  <audio id="bg-music" src="background.mp3" loop></audio>
+  <audio id="fly-sound" src="fly_eat.mp3"></audio>
+   <audio id="bee-sound" src="bee_hit.mp3"></audio>
+  <style>
+    body {
+      margin: 0;
+      background-color: #4a7c59;
+      background-image:
+        radial-gradient(circle at 10% 20%, #ff6b6b 3px, transparent 3px),
+        radial-gradient(circle at 30% 40%, #4ecdc4 2px, transparent 2px),
+        radial-gradient(circle at 50% 10%, #ffe66d 2.5px, transparent 2.5px),
+        radial-gradient(circle at 70% 60%, #ff6b6b 2px, transparent 2px),
+        radial-gradient(circle at 80% 30%, #a8e6cf 3px, transparent 3px),
+        radial-gradient(circle at 20% 70%, #4ecdc4 2.5px, transparent 2.5px),
+        radial-gradient(circle at 60% 80%, #ffe66d 2px, transparent 2px),
+        radial-gradient(circle at 90% 50%, #ff6b6b 2.5px, transparent 2.5px),
+        radial-gradient(circle at 15% 90%, #a8e6cf 2px, transparent 2px),
+        radial-gradient(circle at 40% 25%, #4ecdc4 3px, transparent 3px);
+      background-size: 120px 120px, 100px 100px, 80px 80px, 90px 90px, 110px 110px,
+        95px 95px, 85px 85px, 105px 105px, 75px 75px, 115px 115px;
+      transition: background-image 0.5s ease-in-out;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: Arial, sans-serif;
+      height: 100vh;
+      gap: 20px;
+      position: relative;
+    }
+
+    /* Score- und Levelanzeige */
+    #score-container {
+      display: flex;
+      gap: 20px;
+      font-size: 24px;
+      font-weight: bold;
+      color: #333;
+      background-color: rgba(255, 255, 255, 0.9);
+      padding: 8px 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      z-index: 2;
+    }
+
+    #game-area {
+      position: relative;
+      width: 800px;
+      height: 400px;
+      background-color: #a0d080;
+      border: 4px solid #444;
+      overflow: hidden;
+      z-index: 2;
+    }
+
+    #frog {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      left: 100px;
+      background-image: url("frog.png");
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      transition: top 0.2s ease;
+    }
+
+    .fly, .bee {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+    }
+
+    .fly {
+      background-image: url("fly_alone.png");
+    }
+    .bee {
+      background-image: url("bee.png");
+    }
+
+    /* End-Screen-Overlay beim Gewinn */
+    #end-screen {
+      display: none;
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      font-size: 48px;
+      z-index: 3;
+    }
+    #end-screen button {
+      font-size: 24px;
+      margin: 10px;
+      padding: 5px 15px;
+    }
+
+    /* Copyright im rechten unteren Bereich */
+    #footer {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      font-size: 14px;
+      color: #ffffff;
+      z-index: 4;
+      font-family: Arial, sans-serif;
+    }
+
+    /* Pause-Button Styling */
+    #pause-btn {
+      margin-top: 0;
+      margin-bottom: 10px;
+      padding: 10px 30px;
+      font-size: 18px;
+      font-weight: bold;
+      background-color: #ffcc00;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+      transition: background-color 0.3s ease;
+      z-index: 2;
+    }
+
+    #pause-btn:hover {
+      background-color: #ffdd33;
+    }
+  </style>
+</head>
+<body>
+  <!-- Score- und Levelanzeige -->
+  <div id="score-container">
+    <span id="score">Punkte: 0</span>
+    <span id="level">Level: 1</span>
+  </div>
+
+  <!-- Spielfeld -->
+  <div id="game-area">
+    <div id="frog"></div>
+    <div id="flies-container"></div>
+    <div id="bees-container"></div>
+  </div>
+
+  <!-- Pause Button mittig unter Spielfeld -->
+  <button id="pause-btn">Pause</button>
+
+  <!-- End-Screen bei Gewinn -->
+  <div id="end-screen">
+    <div id="win-message">WIN</div>
+    <div style="font-size:24px; margin:20px;">Noch einmal spielen?</div>
+    <div>
+      <button id="btn-yes">Ja</button>
+      <button id="btn-no">Nein</button>
+    </div>
+  </div>
+
+  <!-- Copyright -->
+  <div id="footer">© Sarah Wauschkuhn - 2025</div>
+
+  <script>
+    // DOM-Elemente
+    const frog = document.getElementById("frog");
+    const fliesContainer = document.getElementById("flies-container");
+    const beesContainer = document.getElementById("bees-container");
+
+    const scoreElement = document.getElementById("score");
+    const levelElement = document.getElementById("level");
+    const endScreen = document.getElementById("end-screen");
+    const btnYes = document.getElementById("btn-yes");
+    const btnNo = document.getElementById("btn-no");
+    const pauseBtn = document.getElementById("pause-btn");
+    //Musik
+    const bgMusic = document.getElementById("bg-music"); 
+    bgMusic.volume = 0.5; // optional
+
+    // Globale Variablen
+    let score = 0;
+    let currentLevel = 1;
+    let gameRunning = true;
+    let paused = false;
+    let frogVerticalPosition = 340;
+    let flies = [];
+    let bees = [];
+    let flyIdCounter = 0;
+    let beeIdCounter = 0;
+
+    // Frosch initialisieren
+    frog.style.top = frogVerticalPosition + "px";
+    frog.style.backgroundImage = 'url("frog.png")';
+    frog.dataset.jumping = "false";
+
+
+// Tastatursteuerung
+document.addEventListener("keydown", (e) => {
+  if (paused) return;
+  if (e.code === "ArrowRight") {    // Rechtspfeil statt Leertaste
+    jumpFrog();
+  } else if (e.code === "ArrowUp") {
+    moveFrogUp();
+  } else if (e.code === "ArrowDown") {
+    moveFrogDown();
+  }
+});
+
+pauseBtn.addEventListener("click", () => {
+  paused = !paused;
+  pauseBtn.textContent = paused ? "Weiter" : "Pause";
+  if (paused) {
+    bgMusic.pause();
+  } else {
+    bgMusic.play();
+    moveObstacles();
+  }
+});
+
+    function moveFrogUp() {
+      if (frogVerticalPosition > 10) {
+        frogVerticalPosition -= 20;
+        frog.style.top = frogVerticalPosition + "px";
+      }
+    }
+
+    function moveFrogDown() {
+      if (frogVerticalPosition < 340) {
+        frogVerticalPosition += 20;
+        frog.style.top = frogVerticalPosition + "px";
+      }
+    }
+
+    function jumpFrog() {
+      if (frog.dataset.jumping === "true") return;
+      frog.dataset.jumping = "true";
+      frog.style.backgroundImage = 'url("frog_zunge.png")';
+      const jumpHeight = Math.max(10, frogVerticalPosition - 100);
+      frog.style.top = jumpHeight + "px";
+      setTimeout(() => {
+        frog.style.top = frogVerticalPosition + "px";
+        frog.style.backgroundImage = 'url("frog.png")';
+        frog.dataset.jumping = "false";
+      }, 300);
+    }
+
+    function createFly() {
+      const fly = document.createElement("div");
+      fly.className = "fly";
+      fly.id = "fly-" + flyIdCounter++;
+      fly.style.left = "800px";
+      fly.style.top = Math.floor(Math.random() * 300 + 50) + "px";
+      fliesContainer.appendChild(fly);
+      flies.push({
+        element: fly,
+        position: 800,
+        speed: Math.random() * 2 + 1
+      });
+    }
+
+    function createBee() {
+      if (currentLevel < 2) return;
+      const bee = document.createElement("div");
+      bee.className = "bee";
+      bee.id = "bee-" + beeIdCounter++;
+      bee.style.left = "800px";
+      bee.style.top = Math.floor(Math.random() * 300 + 50) + "px";
+      beesContainer.appendChild(bee);
+      let beeObj = {
+        element: bee,
+        position: 800,
+        speed: Math.random() * 1.5 + 1.5
+      };
+      if (score >= 250) {
+        beeObj.diagonal = (Math.random() < 0.5);
+      }
+      bees.push(beeObj);
+    }
+
+    function initializeFlies() {
+      for (let i = 0; i < 3; i++) {
+        setTimeout(() => createFly(), i * 2000);
+      }
+    }
+
+    function initializeBees() {
+      if (currentLevel >= 2) {
+        for (let i = 0; i < 2; i++) {
+          setTimeout(() => createBee(), i * 3000);
+        }
+      }
+    }
+
+    function moveObstacles() {
+      if (!gameRunning || paused) return;
+
+      // Fliegen bewegen
+      flies.forEach((fly, index) => {
+        let speed = fly.speed;
+        if (currentLevel >= 4) {
+          speed *= 1.5;
+        }
+        fly.position -= speed;
+        fly.element.style.left = fly.position + "px";
+        if (fly.position < -30) {
+          fly.element.remove();
+          flies.splice(index, 1);
+          let delay = Math.random() * 3000 + 1000;
+          setTimeout(() => createFly(), delay);
+        }
+      });
+
+      // Bienen bewegen
+      bees.forEach((bee, index) => {
+        let speed = bee.speed;
+        if (currentLevel >= 5) {
+          speed *= 1.5;
+        }
+        bee.position -= speed;
+        if (bee.diagonal) {
+          if (bee.verticalDirection === undefined) {
+            bee.verticalDirection = (Math.random() < 0.5 ? 1 : -1);
+          }
+          let currentTop = parseInt(bee.element.style.top);
+          let newTop = currentTop + bee.verticalDirection * 1;
+          if (newTop < 10 || newTop > 350) {
+            bee.verticalDirection *= -1;
+            newTop = currentTop + bee.verticalDirection * 1;
+          }
+          bee.element.style.top = newTop + "px";
+        }
+        bee.element.style.left = bee.position + "px";
+        if (bee.position < -30) {
+          bee.element.remove();
+          bees.splice(index, 1);
+          let beeDelay = currentLevel >= 3 ? (Math.random() * 2000 + 500) : (Math.random() * 3000 + 1000);
+          setTimeout(() => createBee(), beeDelay);
+        }
+      });
+
+      checkCollisions();
+      requestAnimationFrame(moveObstacles);
+    }
+
+    function checkCollisions() {
+      let currentFrogTop = (frog.dataset.jumping === "true")
+          ? Math.max(10, frogVerticalPosition - 100)
+          : frogVerticalPosition;
+      const frogRect = {
+        left: 100,
+        right: 160,
+        top: currentFrogTop,
+        bottom: currentFrogTop + 60
+      };
+
+      flies.forEach((fly, index) => {
+        const flyTop = parseInt(fly.element.style.top);
+        const flyRect = {
+          left: fly.position,
+          right: fly.position + 30,
+          top: flyTop,
+          bottom: flyTop + 30
+        };
+        if (frogRect.left < flyRect.right &&
+            frogRect.right > flyRect.left &&
+            frogRect.top < flyRect.bottom &&
+            frogRect.bottom > flyRect.top) {
+          score++;
+          updateScore();
+          fly.element.remove();
+          flies.splice(index, 1);
+	      document.getElementById("fly-sound").play();
+          setTimeout(() => createFly(), Math.random() * 2000 + 500);
+        }
+      });
+
+      if (currentLevel >= 2) {
+        bees.forEach((bee, index) => {
+          const beeTop = parseInt(bee.element.style.top);
+          const beeRect = {
+            left: bee.position,
+            right: bee.position + 30,
+            top: beeTop,
+            bottom: beeTop + 30
+          };
+          if (frogRect.left < beeRect.right &&
+              frogRect.right > beeRect.left &&
+              frogRect.top < beeRect.bottom &&
+              frogRect.bottom > beeRect.top) {
+            score--;
+            updateScore();
+            bee.element.remove();
+            bees.splice(index, 1);
+            document.getElementById("bee-sound").play();
+            let beeDelay = currentLevel >= 3 ? (Math.random() * 2000 + 500) : (Math.random() * 3000 + 1000);
+            setTimeout(() => createBee(), beeDelay);
+          }
+        });
+      }
+
+      if (score >= 300) {
+        winGame();
+      }
+    }
+
+    function updateScore() {
+      scoreElement.textContent = "Punkte: " + score;
+      updateLevel();
+    }
+
+    function updateLevel() {
+      let oldLevel = currentLevel;
+      let newLevel;
+      if (score < 50) newLevel = 1;
+      else if (score < 100) newLevel = 2;
+      else if (score < 150) newLevel = 3;
+      else if (score < 200) newLevel = 4;
+      else if (score < 250) newLevel = 5;
+      else if (score < 300) newLevel = 6;
+      else newLevel = 7;
+
+      currentLevel = newLevel;
+      levelElement.textContent = "Level: " + (currentLevel < 7 ? currentLevel : 6);
+      updateBackground();
+
+      if (oldLevel < 2 && currentLevel >= 2) {
+        initializeBees();
+      }
+    }
+
+    function updateBackground() {
+      let bgStyle = '';
+      switch (currentLevel) {
+        case 1:
+          bgStyle = `
+            radial-gradient(circle at 10% 20%, #ff6b6b 3px, transparent 3px),
+            radial-gradient(circle at 30% 40%, #4ecdc4 2px, transparent 2px),
+            radial-gradient(circle at 50% 10%, #ffe66d 2.5px, transparent 2.5px),
+            radial-gradient(circle at 70% 60%, #ff6b6b 2px, transparent 2px),
+            radial-gradient(circle at 80% 30%, #a8e6cf 3px, transparent 3px),
+            radial-gradient(circle at 20% 70%, #4ecdc4 2.5px, transparent 2.5px),
+            radial-gradient(circle at 60% 80%, #ffe66d 2px, transparent 2px),
+            radial-gradient(circle at 90% 50%, #ff6b6b 2.5px, transparent 2.5px),
+            radial-gradient(circle at 15% 90%, #a8e6cf 2px, transparent 2px),
+            radial-gradient(circle at 40% 25%, #4ecdc4 3px, transparent 3px)
+          `;
+          break;
+        case 2:
+          bgStyle = `
+            radial-gradient(circle at 10% 20%, #ff9b9b 4px, transparent 4px),
+            radial-gradient(circle at 30% 40%, #6bd8d8 3px, transparent 3px),
+            radial-gradient(circle at 50% 10%, #fff39d 3px, transparent 3px),
+            radial-gradient(circle at 70% 60%, #ff9b9b 3px, transparent 3px),
+            radial-gradient(circle at 80% 30%, #c1e8d2 4px, transparent 4px),
+            radial-gradient(circle at 20% 70%, #6bd8d8 3px, transparent 3px),
+            radial-gradient(circle at 60% 80%, #fff39d 3px, transparent 3px),
+            radial-gradient(circle at 90% 50%, #ff9b9b 3px, transparent 3px),
+            radial-gradient(circle at 15% 90%, #c1e8d2 3px, transparent 3px),
+            radial-gradient(circle at 40% 25%, #6bd8d8 4px, transparent 4px)
+          `;
+          break;
+        case 3:
+          bgStyle = `
+            radial-gradient(circle at 10% 20%, #ffadad 5px, transparent 5px),
+            radial-gradient(circle at 30% 40%, #caffbf 4px, transparent 4px),
+            radial-gradient(circle at 50% 10%, #fdffb6 4px, transparent 4px),
+            radial-gradient(circle at 70% 60%, #ffadad 4px, transparent 4px),
+            radial-gradient(circle at 80% 30%, #9bf6ff 5px, transparent 5px),
+            radial-gradient(circle at 20% 70%, #caffbf 4px, transparent 4px),
+            radial-gradient(circle at 60% 80%, #fdffb6 4px, transparent 4px),
+            radial-gradient(circle at 90% 50%, #ffadad 4px, transparent 4px),
+            radial-gradient(circle at 15% 90%, #9bf6ff 4px, transparent 4px),
+            radial-gradient(circle at 40% 25%, #caffbf 5px, transparent 5px)
+          `;
+          break;
+        case 4:
+          bgStyle = `
+            radial-gradient(circle at 10% 20%, #ffd6d6 6px, transparent 6px),
+            radial-gradient(circle at 30% 40%, #d0f4de 5px, transparent 5px),
+            radial-gradient(circle at 50% 10%, #fffacd 5px, transparent 5px),
+            radial-gradient(circle at 70% 60%, #ffd6d6 5px, transparent 5px),
+            radial-gradient(circle at 80% 30%, #a9def9 6px, transparent 6px),
+            radial-gradient(circle at 20% 70%, #d0f4de 5px, transparent 5px),
+            radial-gradient(circle at 60% 80%, #fffacd 5px, transparent 5px),
+            radial-gradient(circle at 90% 50%, #ffd6d6 5px, transparent 5px),
+            radial-gradient(circle at 15% 90%, #a9def9 5px, transparent 5px),
+            radial-gradient(circle at 40% 25%, #d0f4de 6px, transparent 6px)
+          `;
+          break;
+        case 5:
+          bgStyle = `
+            radial-gradient(circle at 10% 20%, #ffeaea 7px, transparent 7px),
+            radial-gradient(circle at 30% 40%, #e0f7fa 6px, transparent 6px),
+            radial-gradient(circle at 50% 10%, #fff8e1 6px, transparent 6px),
+            radial-gradient(circle at 70% 60%, #ffeaea 6px, transparent 6px),
+            radial-gradient(circle at 80% 30%, #90caf9 7px, transparent 7px),
+            radial-gradient(circle at 20% 70%, #e0f7fa 6px, transparent 6px),
+            radial-gradient(circle at 60% 80%, #fff8e1 6px, transparent 6px),
+            radial-gradient(circle at 90% 50%, #ffeaea 6px, transparent 6px),
+            radial-gradient(circle at 15% 90%, #90caf9 6px, transparent 6px),
+            radial-gradient(circle at 40% 25%, #e0f7fa 7px, transparent 7px)
+          `;
+          break;
+        case 6:
+          bgStyle = `
+            radial-gradient(circle at 10% 20%, #fff0f0 8px, transparent 8px),
+            radial-gradient(circle at 30% 40%, #e6f0f0 7px, transparent 7px),
+            radial-gradient(circle at 50% 10%, #fffde7 7px, transparent 7px),
+            radial-gradient(circle at 70% 60%, #fff0f0 7px, transparent 7px),
+            radial-gradient(circle at 80% 30%, #64b5f6 8px, transparent 8px),
+            radial-gradient(circle at 20% 70%, #e6f0f0 7px, transparent 7px),
+            radial-gradient(circle at 60% 80%, #fffde7 7px, transparent 7px),
+            radial-gradient(circle at 90% 50%, #fff0f0 7px, transparent 7px),
+            radial-gradient(circle at 15% 90%, #64b5f6 7px, transparent 7px),
+            radial-gradient(circle at 40% 25%, #e6f0f0 8px, transparent 8px)
+          `;
+          break;
+        default:
+          bgStyle = `
+            radial-gradient(circle at 10% 20%, #ff6b6b 3px, transparent 3px),
+            radial-gradient(circle at 30% 40%, #4ecdc4 2px, transparent 2px),
+            radial-gradient(circle at 50% 10%, #ffe66d 2.5px, transparent 2.5px),
+            radial-gradient(circle at 70% 60%, #ff6b6b 2px, transparent 2px),
+            radial-gradient(circle at 80% 30%, #a8e6cf 3px, transparent 3px),
+            radial-gradient(circle at 20% 70%, #4ecdc4 2.5px, transparent 2.5px),
+            radial-gradient(circle at 60% 80%, #ffe66d 2px, transparent 2px),
+            radial-gradient(circle at 90% 50%, #ff6b6b 2.5px, transparent 2.5px),
+            radial-gradient(circle at 15% 90%, #a8e6cf 2px, transparent 2px),
+            radial-gradient(circle at 40% 25%, #4ecdc4 3px, transparent 3px)
+          `;
+      }
+      document.body.style.backgroundImage = bgStyle;
+    }
+
+    function winGame() {
+      gameRunning = false;
+      paused = true;
+      endScreen.style.display = "flex";
+    }
+
+    btnYes.addEventListener("click", () => {
+      // Spiel zurücksetzen
+      score = 0;
+      currentLevel = 1;
+      updateScore();
+      gameRunning = true;
+      paused = false;
+      endScreen.style.display = "none";
+
+      // Alle Fliegen und Bienen entfernen
+      flies.forEach(fly => fly.element.remove());
+      flies = [];
+      bees.forEach(bee => bee.element.remove());
+      bees = [];
+
+      initializeFlies();
+      moveObstacles();
+    });
+
+    btnNo.addEventListener("click", () => {
+      endScreen.style.display = "none";
+      pauseBtn.disabled = true;
+      pauseBtn.textContent = "Spiel beendet";
+    });
+
+    // Spielstart
+    initializeFlies();
+    moveObstacles();
+    bgMusic.play().catch(() => {
+    // Manche Browser blockieren Autoplay bis zur ersten Interaktion
+     console.log("Musikstart wird beim ersten Klick aktiviert.");
+     });
+  </script>
+</body>
+</html>
